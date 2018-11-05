@@ -183,15 +183,6 @@ public final class ReciprocalArraySum {
         
          ForkJoinTask.invokeAll(taskList);
     
-//        for (int i = 0; i < numTasks - 1; i++) {
-//            taskList.get(i).fork();
-//        }
-//        taskList.get(numTasks-1).compute();
-//    
-//        for (int i = 0; i < numTasks; i++) {
-//            taskList.get(i).join();
-//        }
-//        
         for (ReciprocalArraySumTask task : taskList) {
             sum += task.getValue();
         }
