@@ -1,10 +1,14 @@
 package edu.coursera.parallel;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import static java.lang.Math.toIntExact;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 
 /**
@@ -102,19 +106,17 @@ public final class StudentAnalytics {
      * @return Most common first name of inactive students
      */
     public String mostCommonFirstNameOfInactiveStudentsParallelStream(final Student[] studentArray) {
-        ConcurrentMap<String, Long> studentNameOcurrencesMap = Arrays.stream(studentArray)
-                .parallel()
-                .filter(s -> !s.checkIsCurrent())
-                .collect(Collectors.groupingByConcurrent(Student::getFirstName, Collectors.counting()));
-
-        Optional<Map.Entry<String, Long>> first = studentNameOcurrencesMap
-                .entrySet()
-                .stream()
-                .parallel()
-                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                .findFirst();
-
-        return first.map(Map.Entry::getKey).orElseGet(null);
+        Map<String, Long> namesCountMap = Arrays.stream(studentArray)
+            .parallel()
+            .filter(s -> !s.checkIsCurrent())
+            .map(Student::getFirstName)
+            .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+    
+        return namesCountMap.entrySet()
+            .stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
+            .orElseGet(null);
     }
 
     /**
