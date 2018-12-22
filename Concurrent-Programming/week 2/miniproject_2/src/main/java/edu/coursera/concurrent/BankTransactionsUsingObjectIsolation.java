@@ -1,5 +1,7 @@
 package edu.coursera.concurrent;
 
+import edu.rice.pcdp.PCDP;
+
 import static edu.rice.pcdp.PCDP.isolated;
 
 /**
@@ -19,6 +21,11 @@ public final class BankTransactionsUsingObjectIsolation
          * BankTransactionsUsingGlobalIsolation. Keep in mind that isolation
          * must be applied to both src and dst.
          */
-        throw new UnsupportedOperationException();
+        isolated(src, dst, () -> {
+            boolean success = src.withdraw(amount);
+            if (success) {
+                dst.deposit(amount);
+            }
+        });
     }
 }
