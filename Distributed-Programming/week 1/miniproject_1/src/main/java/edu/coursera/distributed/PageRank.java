@@ -1,6 +1,5 @@
 package edu.coursera.distributed;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaPairRDD;
 import scala.Tuple2;
 
