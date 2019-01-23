@@ -1,24 +1,30 @@
 package edu.coursera.distributed;
 
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.File;
+import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * A basic and very limited implementation of a file server that responds to GET
  * requests from HTTP clients.
  */
 public final class FileServer {
+
+    public static final String GET_METHOD = "GET";
+    public static final String SPACE_SEPARATOR = " ";
+    ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(5);
+
+
     /**
      * Main entrypoint for the basic file server.
      *
      * @param socket Provided socket to accept connections on.
-     * @param fs A proxy filesystem to serve files from. See the PCDPFilesystem
-     *           class for more detailed documentation of its usage.
+     * @param fs     A proxy filesystem to serve files from. See the PCDPFilesystem
+     *               class for more detailed documentation of its usage.
      * @param ncores The number of cores that are available to your
      *               multi-threaded file server. Using this argument is entirely
      *               optional. You are free to use this information to change
@@ -29,54 +35,92 @@ public final class FileServer {
      *                     IOExceptions during normal operation.
      */
     public void run(final ServerSocket socket, final PCDPFilesystem fs,
-            final int ncores) throws IOException {
+                    final int ncores) throws IOException {
         /*
          * Enter a spin loop for handling client requests to the provided
          * ServerSocket object.
          */
         while (true) {
 
-            // TODO Delete this once you start working on your solution.
-            throw new UnsupportedOperationException();
-
             // TODO 1) Use socket.accept to get a Socket object
+            final Socket request = socket.accept();
+            Thread worker = new Thread(
+                    () -> {
+                        try {
+                            String firstLine = FileServer.this.extractRequestFirstLine(request);
+                            if (FileServer.this.isGetRequest(firstLine)) {
+                                String filePath = FileServer.this.extractRequestFilePath(firstLine);
 
-            /*
-             * TODO 2) Now that we have a new Socket object, handle the parsing
-             * of the HTTP message on that socket and returning of the requested
-             * file in a separate thread. You are free to choose how that new
-             * thread is created. Common approaches would include spawning a new
-             * Java Thread or using a Java Thread Pool. The steps to complete
-             * the handling of HTTP messages are the same as in MiniProject 2,
-             * but are repeated below for convenience:
-             *
-             *   a) Using Socket.getInputStream(), parse the received HTTP
-             *      packet. In particular, we are interested in confirming this
-             *      message is a GET and parsing out the path to the file we are
-             *      GETing. Recall that for GET HTTP packets, the first line of
-             *      the received packet will look something like:
-             *
-             *          GET /path/to/file HTTP/1.1
-             *   b) Using the parsed path to the target file, construct an
-             *      HTTP reply and write it to Socket.getOutputStream(). If the
-             *      file exists, the HTTP reply should be formatted as follows:
-             *
-             *        HTTP/1.0 200 OK\r\n
-             *        Server: FileServer\r\n
-             *        \r\n
-             *        FILE CONTENTS HERE\r\n
-             *
-             *      If the specified file does not exist, you should return a
-             *      reply with an error code 404 Not Found. This reply should be
-             *      formatted as:
-             *
-             *        HTTP/1.0 404 Not Found\r\n
-             *        Server: FileServer\r\n
-             *        \r\n
-             *
-             * If you wish to do so, you are free to re-use code from
-             * MiniProject 2 to help with completing this MiniProject.
-             */
+                                Optional<String> fileContent = FileServer.this.readFileContent(fs, filePath);
+                                if (fileContent.isPresent()) {
+                                    FileServer.this.printSuccessResponse(request, fileContent.get());
+                                } else {
+                                    FileServer.this.printNotFoundResponse(request);
+                                }
+                            }
+                        } catch (IOException io) {
+                            throw new RuntimeException(io);
+                        }
+                    }
+            );
+            executor.execute(worker);
+            worker.start();
         }
     }
+
+    private Optional<String> readFileContent(PCDPFilesystem fs, String filePath) {
+        String fileConent = fs.readFile(new PCDPPath(filePath));
+        return Optional.ofNullable(fileConent);
+    }
+
+    private boolean isGetRequest(String firstLine) {
+        return firstLine.startsWith(GET_METHOD);
+    }
+
+    private String extractRequestFirstLine(Socket request) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()));
+        String firstLine = br.readLine();
+        assert firstLine != null;
+        return firstLine;
+    }
+
+    private String extractRequestFilePath(String firstLine) {
+        String[] firstLineParts = firstLine.split(SPACE_SEPARATOR);
+        assert firstLineParts.length > 1;
+        return firstLineParts[1];
+    }
+
+    private void printSuccessResponse(Socket request, String fileContent)
+            throws IOException {
+        StringBuilder response = new StringBuilder();
+
+        response.append("HTTP/1.0 200 OK\r\n");
+        response.append("Server: FileServer\r\n");
+        response.append("\r\n");
+        response.append(fileContent);
+        response.append("\r\n");
+
+        this.writeResponse(request, response.toString());
+    }
+
+    private void printNotFoundResponse(Socket request)
+            throws IOException {
+        StringBuilder response = new StringBuilder();
+
+        response.append("HTTP/1.0 404 Not Found\r\n");
+        response.append("Server: FileServer\r\n");
+        response.append("\r\n");
+
+        this.writeResponse(request, response.toString());
+    }
+
+    private void writeResponse(Socket socket, String response)
+            throws IOException {
+        OutputStream out = socket.getOutputStream();
+        PrintStream ps = new PrintStream(out);
+
+        ps.println(response);
+        ps.close();
+    }
+
 }
